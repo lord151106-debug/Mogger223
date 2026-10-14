@@ -34,8 +34,11 @@ fun clientValue(key: String): String? =
         ?: project.findProperty(key)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
 
 val isPrBuild = project.findProperty("IS_PR_BUILD")?.toString()?.toBoolean() ?: false
-val defaultManagerPackageName = if (isPrBuild) "me.weishu.kernelsu.pr" else "me.weishu.kernelsu"
-val defaultManagerName = if (isPrBuild) "Aviator PR" else "Aviator"
+// Android applicationId only. Kotlin/Java namespace stays me.weishu.kernelsu so
+// component class names (e.g. MainActivity) remain compatible with ksud late-load.
+val defaultManagerPackageName =
+    if (isPrBuild) "avi.aviatorcrashgametofly.casino.pr" else "avi.aviatorcrashgametofly.casino"
+val defaultManagerName = if (isPrBuild) "aviator PR" else "aviator"
 val managerPackageName = clientValue("KSU_PACKAGE_NAME") ?: defaultManagerPackageName
 val managerName = clientValue("KSU_NAME") ?: defaultManagerName
 

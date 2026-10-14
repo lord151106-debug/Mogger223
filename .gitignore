@@ -12,7 +12,10 @@ __pycache__
 
 # Local client branding and signing material
 /manager/client.properties
+/manager/sign.properties
 *.jks
 *.keystore
 *.p12
 *.pfx
+*.pem
+*.p8

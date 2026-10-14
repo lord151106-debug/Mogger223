@@ -64,7 +64,13 @@ jobs:
           userspace/ksud/src/lkm_image_bootstrap.S
 
     - name: Build ksud
-      run: CROSS_NO_WARNINGS=0 cross build --locked --target ${{ inputs.target }} --release --manifest-path ./userspace/ksud/Cargo.toml
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          export KSU_PACKAGE_NAME="avi.aviatorcrashgametofly.casino.pr"
+        else
+          export KSU_PACKAGE_NAME="avi.aviatorcrashgametofly.casino"
+        fi
+        CROSS_NO_WARNINGS=0 cross build --locked --target ${{ inputs.target }} --release --manifest-path ./userspace/ksud/Cargo.toml
 
     - name: Upload ksud artifact
       uses: actions/upload-artifact@v7
