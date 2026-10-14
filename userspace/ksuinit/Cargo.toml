@@ -22,4 +22,4 @@ syscalls = { version = "0.8", default-features = false, features = [
 
 # for kmsg logging
 log.workspace = true
-kernlog = { git = "https://github.com/kstep/kernlog.rs" }
+kernlog = { git = "https://github.com/kstep/kernlog.rs", rev = "68caa7bf1e27baea35b00ebba786cafae0bca90f" }
