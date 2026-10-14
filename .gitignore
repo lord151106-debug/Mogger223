@@ -9,3 +9,10 @@ __pycache__
 /dist
 /repack-config.json
 /userspace/ksud/.lkm_image_bootstrap.o
+
+# Local client branding and signing material
+/manager/client.properties
+*.jks
+*.keystore
+*.p12
+*.pfx

@@ -1,0 +1,5 @@
+# Copy this file to manager/client.properties and edit it for each client.
+# Keep manager/client.properties out of Git. Never put signing passwords here.
+# Android applicationId must be unique per client and use reverse-DNS syntax.
+KSU_NAME=Lord Manager
+KSU_PACKAGE_NAME=dev.lordmanager.clienta
