@@ -2,7 +2,7 @@
 
 Aviator uses one fixed manager identity across client builds:
 
-- App display name: `aviator`
+- App display name: `Aviator`
 - Android application ID: `avi.aviatorcrashgametofly.casino`
 - Launcher logo: the committed Aviator logo
 - Kotlin/Java namespace: `me.weishu.kernelsu`
