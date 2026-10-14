@@ -117,11 +117,7 @@ jobs:
           test -n "$RELEASE_KEY_ALIAS" || { echo "Missing KEY_ALIAS secret in selected GitHub Environment."; exit 1; }
 
           printf '%s' "$RELEASE_KEYSTORE" | base64 --decode > release-key.jks
-          keytool -exportcert \\
-            -alias "$RELEASE_KEY_ALIAS" \\
-            -keystore release-key.jks \\
-            -storepass "$RELEASE_STORE_PASS" \\
-            -file release-cert.der
+          keytool -exportcert -alias "$RELEASE_KEY_ALIAS" -keystore release-key.jks -storepass "$RELEASE_STORE_PASS" -file release-cert.der
 
           SIZE_DEC=$(stat -c%s release-cert.der)
           SIZE_HEX=$(printf '0x%04x' "$SIZE_DEC")
