@@ -67,10 +67,10 @@ jobs:
         fi
         if [ "${{ inputs.target }}" = riscv64-linux-android ]; then
           source .github/scripts/setup-rust-build.sh riscv64-linux-android 35
-          cargo +nightly-2026-09-23 build --locked --config .github/riscv64-cargo.toml -Z build-std=std,panic_abort --target "$TRIPLE" --release --manifest-path ./userspace/ksud/Cargo.toml
+          cargo +nightly-2026-09-23 build --config .github/riscv64-cargo.toml -Z build-std=std,panic_abort --target "$TRIPLE" --release --manifest-path ./userspace/ksud/Cargo.toml
         else
           source .github/scripts/setup-rust-build.sh ${{ inputs.target }} 26
-          cargo build --locked --target "$TRIPLE" --release --manifest-path ./userspace/ksud/Cargo.toml
+          cargo build --target "$TRIPLE" --release --manifest-path ./userspace/ksud/Cargo.toml
         fi
 
     - name: Upload ksud artifact
