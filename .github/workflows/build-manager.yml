@@ -365,6 +365,30 @@ jobs:
             -S "$SIGN_KEY_PASSWORD" \
             --strip
 
+      - name: Verify final APK signing certificate matches the LKM build identity
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
+        env:
+          EXPECTED_CERT_HASH: ${{ needs.generate-key.outputs.expected_hash }}
+        run: |
+          set -euo pipefail
+          APK=$(find dist -maxdepth 1 -type f -name '*.apk' | head -n 1)
+          test -n "$APK" || { echo "No repacked APK found in dist/"; exit 1; }
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$SDK_ROOT" || { echo "Android SDK path is unavailable; cannot verify final APK certificate."; exit 1; }
+          APKSIGNER=$(find "$SDK_ROOT/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1)
+          test -x "$APKSIGNER" || { echo "apksigner not found in Android SDK build-tools."; exit 1; }
+          ACTUAL_CERT_HASH=$("$APKSIGNER" verify --print-certs "$APK" 2>&1 | sed -nE 's/.*certificate SHA-256 digest: *([0-9a-fA-F:]+).*/\1/p' | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          EXPECTED_CERT_HASH=$(printf '%s' "$EXPECTED_CERT_HASH" | tr '[:upper:]' '[:lower:]')
+          test -n "$ACTUAL_CERT_HASH" || { echo "Could not read APK signer certificate."; exit 1; }
+          echo "Expected signer SHA-256: $EXPECTED_CERT_HASH"
+          echo "Actual APK signer SHA-256: $ACTUAL_CERT_HASH"
+          test "$ACTUAL_CERT_HASH" = "$EXPECTED_CERT_HASH" || {
+            echo "ERROR: APK signer does not match the certificate compiled into the LKM."
+            echo "Refusing to publish a manager APK that the production LKM will reject."
+            exit 1
+          }
+          echo "APK signer matches the LKM build identity."
+
       - name: Upload build artifact
         if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
         uses: actions/upload-artifact@v7
