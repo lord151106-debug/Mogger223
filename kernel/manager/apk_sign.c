@@ -124,13 +124,26 @@ static bool check_block(struct file *fp, loff_t *pos, loff_t block_end, unsigned
         return false;
     }
 
-    char cert[CERT_MAX_LENGTH];
-    if (!read_exact(fp, cert, certificate_size, pos, certificates_end))
+    /*
+     * Certificates are supplied by APK files and can be larger than a safe
+     * kernel stack allocation. Allocate the bounded buffer from heap instead.
+     */
+    char *cert = kmalloc(certificate_size, GFP_KERNEL);
+    if (!cert) {
+        pr_err("cert allocation failed\\n");
         return false;
+    }
+
+    if (!read_exact(fp, cert, certificate_size, pos, certificates_end)) {
+        kfree(cert);
+        return false;
+    }
 
     unsigned char digest[SHA256_DIGEST_SIZE];
-    if (ksu_sha256(cert, certificate_size, digest)) {
-        pr_info("sha256 error\n");
+    int hash_ret = ksu_sha256(cert, certificate_size, digest);
+    kfree(cert);
+    if (hash_ret) {
+        pr_info("sha256 error\\n");
         return false;
     }
 
