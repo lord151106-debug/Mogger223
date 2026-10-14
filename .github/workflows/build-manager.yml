@@ -35,14 +35,24 @@ on:
       - 'userspace/**'
       - 'Cargo.lock'
       - 'Cargo.toml'
+  workflow_dispatch:
+    inputs:
+      client:
+        description: "Client GitHub Environment containing this client's signing secrets"
+        required: true
+        default: "aviator"
+        type: string
+
   workflow_call:
 
 jobs:
   generate-key:
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'pr-build' || inputs.client || 'aviator' }}
     runs-on: ubuntu-latest
     outputs:
-      expected_size: ${{ steps.extract.outputs.expected_size }}
-      expected_hash: ${{ steps.extract.outputs.expected_hash }}
+      expected_size: ${{ steps.extract.outputs.expected_size || steps.extract_release.outputs.expected_size }}
+      expected_hash: ${{ steps.extract.outputs.expected_hash || steps.extract_release.outputs.expected_hash }}
       keystore: ${{ steps.gen.outputs.keystore }}
       keystore_password: ${{ steps.gen.outputs.keystore_password }}
       key_password: ${{ steps.gen.outputs.key_password }}
@@ -92,6 +102,30 @@ jobs:
 
           echo "Certificate size: $SIZE_HEX ($SIZE_DEC bytes)"
           echo "Certificate hash: $HASH"
+
+      - name: Extract configured release certificate hash and size
+        if: github.event_name != 'pull_request'
+        id: extract_release
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.KEYSTORE }}
+          RELEASE_STORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_KEYSTORE" || { echo "Missing KEYSTORE secret in selected GitHub Environment."; exit 1; }
+          test -n "$RELEASE_STORE_PASS" || { echo "Missing KEYSTORE_PASSWORD secret in selected GitHub Environment."; exit 1; }
+          test -n "$RELEASE_KEY_ALIAS" || { echo "Missing KEY_ALIAS secret in selected GitHub Environment."; exit 1; }
+
+          printf '%s' "$RELEASE_KEYSTORE" | base64 --decode > release-key.jks
+          keytool -exportcert -alias "$RELEASE_KEY_ALIAS" -keystore release-key.jks -storepass "$RELEASE_STORE_PASS" -file release-cert.der
+
+          SIZE_DEC=$(stat -c%s release-cert.der)
+          SIZE_HEX=$(printf '0x%04x' "$SIZE_DEC")
+          HASH=$(sha256sum release-cert.der | awk '{print $1}')
+          echo "expected_size=$SIZE_HEX" >> "$GITHUB_OUTPUT"
+          echo "expected_hash=$HASH" >> "$GITHUB_OUTPUT"
+          echo "Configured release certificate size: $SIZE_HEX ($SIZE_DEC bytes)"
+          echo "Configured release certificate SHA-256: $HASH"
 
   build-lkm:
     needs: generate-key
@@ -144,6 +178,8 @@ jobs:
   build-manager:
     needs: [generate-key]
     if: always() && needs.generate-key.result == 'success'
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'pr-build' || inputs.client || 'aviator' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -156,17 +192,25 @@ jobs:
           fetch-depth: 0
 
       - name: Write key
-        if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' )) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' )) || github.ref_type == 'tag' }}
+        env:
+          PROD_KEYSTORE: ${{ secrets.KEYSTORE }}
+          PROD_STORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          PROD_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          PROD_KEY_PASS: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ ! -z "${{ secrets.KEYSTORE }}" ]; then
-            {
-              echo KEYSTORE_PASSWORD='${{ secrets.KEYSTORE_PASSWORD }}'
-              echo KEY_ALIAS='${{ secrets.KEY_ALIAS }}'
-              echo KEY_PASSWORD='${{ secrets.KEY_PASSWORD }}'
-              echo KEYSTORE_FILE='key.jks'
-            } >> gradle.properties
-            echo "${{ secrets.KEYSTORE }}" | base64 -d > key.jks
-          fi
+          set -euo pipefail
+          test -n "$PROD_KEYSTORE" || { echo "Missing KEYSTORE secret in selected GitHub Environment."; exit 1; }
+          test -n "$PROD_STORE_PASS" || { echo "Missing KEYSTORE_PASSWORD secret in selected GitHub Environment."; exit 1; }
+          test -n "$PROD_KEY_ALIAS" || { echo "Missing KEY_ALIAS secret in selected GitHub Environment."; exit 1; }
+          test -n "$PROD_KEY_PASS" || { echo "Missing KEY_PASSWORD secret in selected GitHub Environment."; exit 1; }
+          {
+            printf 'KEYSTORE_PASSWORD=%s\n' "$PROD_STORE_PASS"
+            printf 'KEY_ALIAS=%s\n' "$PROD_KEY_ALIAS"
+            printf 'KEY_PASSWORD=%s\n' "$PROD_KEY_PASS"
+            printf 'KEYSTORE_FILE=%s\n' 'key.jks'
+          } >> gradle.properties
+          printf '%s' "$PROD_KEYSTORE" | base64 --decode > key.jks
 
       - name: Write PR key
         if: github.event_name == 'pull_request'
@@ -195,13 +239,13 @@ jobs:
       - name: Build with Gradle
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            ./gradlew clean assembleRelease -PIS_PR_BUILD=true
+            ./gradlew assembleRelease -PIS_PR_BUILD=true
           else
-            ./gradlew clean assembleRelease
+            ./gradlew assembleRelease
           fi
 
       - name: Upload build artifact
-        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
         uses: actions/upload-artifact@v7
         with:
           name: manager-gradle
@@ -209,7 +253,7 @@ jobs:
 
       - name: Upload mappings
         uses: actions/upload-artifact@v7
-        if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' )) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' )) || github.ref_type == 'tag' }}
         with:
           name: "mappings"
           path: "manager/app/build/outputs/mapping/release/"
@@ -217,6 +261,8 @@ jobs:
   repack-manager:
     needs: [build-manager, build-ksud, generate-key]
     if: always() && needs.build-manager.result == 'success' && needs.build-ksud.result == 'success' && needs.generate-key.result == 'success'
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'pr-build' || inputs.client || 'aviator' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -279,7 +325,7 @@ jobs:
           cp -f "$RISCV64_KSUD" target/riscv64-linux-android/release/ksud
 
       - name: Prepare signing inputs
-        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
         env:
           PR_KEYSTORE: ${{ needs.generate-key.outputs.keystore }}
           PR_KEYSTORE_PASSWORD: ${{ needs.generate-key.outputs.keystore_password }}
@@ -305,7 +351,7 @@ jobs:
           fi
 
       - name: Repack and resign
-        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
         run: |
           python3 repack_apk.py repack \
             -b release \
@@ -320,7 +366,7 @@ jobs:
             --strip
 
       - name: Upload build artifact
-        if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || github.ref_type == 'tag' }}
         uses: actions/upload-artifact@v7
         with:
           name: manager
