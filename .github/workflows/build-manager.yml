@@ -35,14 +35,24 @@ on:
       - 'userspace/**'
       - 'Cargo.lock'
       - 'Cargo.toml'
+  workflow_dispatch:
+    inputs:
+      client:
+        description: "Client GitHub Environment containing this client's signing secrets"
+        required: true
+        default: "aviator"
+        type: string
+
   workflow_call:
 
 jobs:
   generate-key:
+    environment:
+      name: ${{ inputs.client || 'aviator' }}
     runs-on: ubuntu-latest
     outputs:
-      expected_size: ${{ steps.extract.outputs.expected_size }}
-      expected_hash: ${{ steps.extract.outputs.expected_hash }}
+      expected_size: ${{ steps.extract.outputs.expected_size || steps.extract_release.outputs.expected_size }}
+      expected_hash: ${{ steps.extract.outputs.expected_hash || steps.extract_release.outputs.expected_hash }}
       keystore: ${{ steps.gen.outputs.keystore }}
       keystore_password: ${{ steps.gen.outputs.keystore_password }}
       key_password: ${{ steps.gen.outputs.key_password }}
@@ -92,6 +102,34 @@ jobs:
 
           echo "Certificate size: $SIZE_HEX ($SIZE_DEC bytes)"
           echo "Certificate hash: $HASH"
+
+      - name: Extract configured release certificate hash and size
+        if: github.event_name != 'pull_request'
+        id: extract_release
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.KEYSTORE }}
+          RELEASE_STORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_KEYSTORE" || { echo "Missing KEYSTORE secret in selected GitHub Environment."; exit 1; }
+          test -n "$RELEASE_STORE_PASS" || { echo "Missing KEYSTORE_PASSWORD secret in selected GitHub Environment."; exit 1; }
+          test -n "$RELEASE_KEY_ALIAS" || { echo "Missing KEY_ALIAS secret in selected GitHub Environment."; exit 1; }
+
+          printf '%s' "$RELEASE_KEYSTORE" | base64 --decode > release-key.jks
+          keytool -exportcert \\
+            -alias "$RELEASE_KEY_ALIAS" \\
+            -keystore release-key.jks \\
+            -storepass "$RELEASE_STORE_PASS" \\
+            -file release-cert.der
+
+          SIZE_DEC=$(stat -c%s release-cert.der)
+          SIZE_HEX=$(printf '0x%04x' "$SIZE_DEC")
+          HASH=$(sha256sum release-cert.der | awk '{print $1}')
+          echo "expected_size=$SIZE_HEX" >> "$GITHUB_OUTPUT"
+          echo "expected_hash=$HASH" >> "$GITHUB_OUTPUT"
+          echo "Configured release certificate size: $SIZE_HEX ($SIZE_DEC bytes)"
+          echo "Configured release certificate SHA-256: $HASH"
 
   build-lkm:
     needs: generate-key
@@ -144,6 +182,8 @@ jobs:
   build-manager:
     needs: [generate-key]
     if: always() && needs.generate-key.result == 'success'
+    environment:
+      name: ${{ inputs.client || 'aviator' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -195,9 +235,9 @@ jobs:
       - name: Build with Gradle
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            ./gradlew clean assembleRelease -PIS_PR_BUILD=true
+            ./gradlew assembleRelease -PIS_PR_BUILD=true
           else
-            ./gradlew clean assembleRelease
+            ./gradlew assembleRelease
           fi
 
       - name: Upload build artifact
@@ -217,6 +257,8 @@ jobs:
   repack-manager:
     needs: [build-manager, build-ksud, generate-key]
     if: always() && needs.build-manager.result == 'success' && needs.build-ksud.result == 'success' && needs.generate-key.result == 'success'
+    environment:
+      name: ${{ inputs.client || 'aviator' }}
     runs-on: ubuntu-latest
 
     steps:
