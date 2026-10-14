@@ -35,7 +35,7 @@ fun clientValue(key: String): String? =
 
 val isPrBuild = project.findProperty("IS_PR_BUILD")?.toString()?.toBoolean() ?: false
 val defaultManagerPackageName = if (isPrBuild) "me.weishu.kernelsu.pr" else "me.weishu.kernelsu"
-val defaultManagerName = if (isPrBuild) "Aviator PR" else "Aviator"
+val defaultManagerName = if (isPrBuild) "the Aviator PR" else "the Aviator"
 val managerPackageName = clientValue("KSU_PACKAGE_NAME") ?: defaultManagerPackageName
 val managerName = clientValue("KSU_NAME") ?: defaultManagerName
 
