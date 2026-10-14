@@ -1,6 +1,7 @@
 @file:Suppress("UnstableApiUsage")
 
 import com.google.protobuf.gradle.id
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.agp.app)
@@ -22,11 +23,26 @@ val androidTargetCompatibility = rootProject.extra["androidTargetCompatibility"]
 val managerVersionCode = rootProject.extra["managerVersionCode"] as Int
 val managerVersionName = rootProject.extra["managerVersionName"] as String
 
+// Optional local per-client branding. Copy manager/client.properties.example to
+// manager/client.properties; the local file is ignored by Git.
+val clientConfig = Properties().apply {
+    val configFile = rootProject.file("client.properties")
+    if (configFile.isFile) configFile.inputStream().use { load(it) }
+}
+fun clientValue(key: String): String? =
+    clientConfig.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: project.findProperty(key)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+
 val isPrBuild = project.findProperty("IS_PR_BUILD")?.toString()?.toBoolean() ?: false
 val defaultManagerPackageName = if (isPrBuild) "me.weishu.kernelsu.pr" else "me.weishu.kernelsu"
 val defaultManagerName = if (isPrBuild) "Aviator PR" else "Aviator"
-val managerPackageName = project.findProperty("KSU_PACKAGE_NAME")?.toString() ?: defaultManagerPackageName
-val managerName = project.findProperty("KSU_NAME")?.toString() ?: defaultManagerName
+val managerPackageName = clientValue("KSU_PACKAGE_NAME") ?: defaultManagerPackageName
+val managerName = clientValue("KSU_NAME") ?: defaultManagerName
+
+require(managerPackageName.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))) {
+    "KSU_PACKAGE_NAME must be a valid reverse-DNS application ID, e.g. dev.example.manager"
+}
+require(managerName.length <= 40) { "KSU_NAME must be 40 characters or fewer" }
 
 apksign {
     storeFileProperty = "KEYSTORE_FILE"
