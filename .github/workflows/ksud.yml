@@ -24,11 +24,56 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v8
     
-    - name: Prepare LKM files
+    - name: Prepare and validate complete supported LKM bundle
       if: ${{ inputs.pack_lkm }}
+      shell: bash
       run: |
-        cp aarch64-android*-lkm/*_kernelsu.ko ./userspace/ksud/bin/aarch64/
-        cp x86_64-android*-lkm/*_kernelsu.ko ./userspace/ksud/bin/x86_64/
+        set -euo pipefail
+
+        # These are the KMI targets built by build-lkm.yml. Keep this list in
+        # sync with that workflow so a missing artifact cannot silently produce
+        # an APK with only a partial LKM collection.
+        SUPPORTED_KMIS=(
+          android12-5.10
+          android13-5.10
+          android13-5.15
+          android14-5.15
+          android14-6.1
+          android15-6.6
+          android16-6.12
+          android17-6.18
+        )
+
+        for arch in aarch64 x86_64; do
+          destination="./userspace/ksud/bin/$arch"
+          mkdir -p "$destination"
+
+          for kmi in "${SUPPORTED_KMIS[@]}"; do
+            source_dir="${arch}-${kmi}-lkm"
+            source_file="$source_dir/${kmi}_kernelsu.ko"
+            test -s "$source_file" || {
+              echo "ERROR: missing or empty LKM artifact: $source_file"
+              exit 1
+            }
+            cp -f "$source_file" "$destination/${kmi}_kernelsu.ko"
+          done
+
+          echo "Embedded LKM inventory for $arch:"
+          for kmi in "${SUPPORTED_KMIS[@]}"; do
+            test -s "$destination/${kmi}_kernelsu.ko"
+            sha256sum "$destination/${kmi}_kernelsu.ko"
+          done
+
+          actual_count=$(find "$destination" -maxdepth 1 -type f -name '*_kernelsu.ko' | wc -l)
+          expected_count="${#SUPPORTED_KMIS[@]}"
+          test "$actual_count" -eq "$expected_count" || {
+            echo "ERROR: expected $expected_count LKM files for $arch, found $actual_count"
+            exit 1
+          }
+        done
+
+        echo "Validated all ${#SUPPORTED_KMIS[@]} KMI modules for arm64 and x86_64."
+        echo "No RISC-V LKM is built by build-lkm.yml; RISC-V ksud must not be described as supporting bundled RISC-V kernel modules."
     
     - name: Prepare ksuinit
       if: ${{ inputs.pack_ksuinit }}
