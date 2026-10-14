@@ -1,7 +1,6 @@
 @file:Suppress("UnstableApiUsage")
 
 import com.google.protobuf.gradle.id
-import java.util.Properties
 
 plugins {
     alias(libs.plugins.agp.app)
@@ -23,24 +22,12 @@ val androidTargetCompatibility = rootProject.extra["androidTargetCompatibility"]
 val managerVersionCode = rootProject.extra["managerVersionCode"] as Int
 val managerVersionName = rootProject.extra["managerVersionName"] as String
 
-// Optional local per-client branding. Copy manager/client.properties.example to
-// manager/client.properties; the local file is ignored by Git.
-val clientConfig = Properties().apply {
-    val configFile = rootProject.file("client.properties")
-    if (configFile.isFile) configFile.inputStream().use { load(it) }
-}
-fun clientValue(key: String): String? =
-    clientConfig.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() }
-        ?: project.findProperty(key)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
-
+// Keep Aviator identity fixed across all client signing profiles. PR builds use a
+// separate test identity so they cannot be mistaken for or installed over releases.
 val isPrBuild = project.findProperty("IS_PR_BUILD")?.toString()?.toBoolean() ?: false
-// Android applicationId only. Kotlin/Java namespace stays me.weishu.kernelsu so
-// component class names (e.g. MainActivity) remain compatible with ksud late-load.
-val defaultManagerPackageName =
+val managerPackageName =
     if (isPrBuild) "avi.aviatorcrashgametofly.casino.pr" else "avi.aviatorcrashgametofly.casino"
-val defaultManagerName = if (isPrBuild) "aviator PR" else "aviator"
-val managerPackageName = clientValue("KSU_PACKAGE_NAME") ?: defaultManagerPackageName
-val managerName = clientValue("KSU_NAME") ?: defaultManagerName
+val managerName = if (isPrBuild) "Aviator PR" else "Aviator"
 
 require(managerPackageName.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))) {
     "KSU_PACKAGE_NAME must be a valid reverse-DNS application ID, e.g. dev.example.manager"
