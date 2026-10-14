@@ -1,6 +1,0 @@
-# Copy this file to manager/client.properties and edit it for each client.
-# Keep manager/client.properties out of Git. Never put signing passwords here.
-# Android applicationId must be unique per client and use reverse-DNS syntax.
-# This must match kernel KSU_PACKAGE_NAME and ksud KSU_PACKAGE_NAME.
-KSU_NAME=aviator
-KSU_PACKAGE_NAME=avi.aviatorcrashgametofly.casino
