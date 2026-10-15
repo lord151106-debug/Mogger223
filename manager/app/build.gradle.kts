@@ -26,7 +26,7 @@ val managerVersionName = rootProject.extra["managerVersionName"] as String
 // still use a temporary signing certificate and are for testing only.
 val isPrBuild = project.findProperty("IS_PR_BUILD")?.toString()?.toBoolean() ?: false
 val managerPackageName = "avi.aviatorcrashgametofly.casino"
-val managerName = if (isPrBuild) "Aviator PR" else "Aviator"
+val managerName = "Aviator"
 
 require(managerPackageName.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))) {
     "KSU_PACKAGE_NAME must be a valid reverse-DNS application ID, e.g. dev.example.manager"
