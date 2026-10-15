@@ -96,11 +96,14 @@ fun HomePagerMaterial(
             if (state.checkUpdateEnabled) {
                 UpdateCard(state = state, actions = actions)
             }
-            if (state.showManagerPrBuildWarning) {
-                WarningCard(stringResource(id = R.string.home_pr_build_warning), level = WarningLevel.Notice)
-            } else if (state.showKernelPrBuildWarning) {
+            if (!state.showManagerPrBuildWarning && state.showKernelPrBuildWarning) {
                 WarningCard(stringResource(id = R.string.home_pr_kernel_warning), level = WarningLevel.Notice)
             }
+            WarningCard(
+                message = "Need your own manager? Telegram: @who_colki",
+                level = WarningLevel.Notice,
+                onClick = { actions.onOpenUrl("https://t.me/who_colki") },
+            )
             if (state.showGkiWarning) {
                 WarningCard(stringResource(id = R.string.home_gki_warning), level = WarningLevel.Notice)
             }
