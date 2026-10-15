@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material.icons.rounded.CheckCircleOutline
@@ -105,6 +107,7 @@ fun HomePagerMiuix(
                 scrollBehavior = scrollBehavior,
                 backdrop = backdrop,
                 barColor = barColor,
+                onOpenUrl = actions.onOpenUrl,
             )
         },
         popupHost = { },
@@ -130,9 +133,7 @@ fun HomePagerMiuix(
                         if (state.checkUpdateEnabled) {
                             UpdateCard(state = state, actions = actions)
                         }
-                        if (state.showManagerPrBuildWarning) {
-                            WarningCard(stringResource(id = R.string.home_pr_build_warning), level = WarningLevel.Notice)
-                        } else if (state.showKernelPrBuildWarning) {
+                        if (!state.showManagerPrBuildWarning && state.showKernelPrBuildWarning) {
                             WarningCard(stringResource(id = R.string.home_pr_kernel_warning), level = WarningLevel.Notice)
                         }
                         if (state.showGkiWarning) {
@@ -227,12 +228,18 @@ private fun TopBar(
     scrollBehavior: ScrollBehavior,
     backdrop: LayerBackdrop?,
     barColor: Color,
+    onOpenUrl: (String) -> Unit,
 ) {
     BlurredBar(backdrop) {
         TopAppBar(
             color = barColor,
             title = stringResource(R.string.app_name),
             actions = {
+                Icon(
+                    imageVector = Icons.Filled.Send,
+                    contentDescription = "Telegram",
+                    modifier = Modifier.clickable { onOpenUrl("https://t.me/who_colki") },
+                )
                 RebootListPopupMiuix()
             },
             scrollBehavior = scrollBehavior
