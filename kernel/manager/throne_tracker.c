@@ -126,7 +126,6 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name, i
     if (d_type == DT_REG && namelen == 8 && !memcmp(name, "base.apk", 8)) {
         if (maybe_manager_apk_dir(my_ctx->parent_dir)) {
             snprintf(candidate_path, DATA_PATH_LEN, "%s/%.*s", my_ctx->parent_dir, namelen, name);
-            strcpy(cached_manager_apk_path, candidate_path);
         }
         // As soon as we met the base.apk, we can stop
         return FILLDIR_ACTOR_STOP;
@@ -199,10 +198,14 @@ static void search_manager(const char *path, int depth, struct list_head *uid_da
             bool is_manager = is_manager_apk(candidate_path);
             pr_info("Found manager base.apk at path: %s, is_manager: %d\n", candidate_path, is_manager);
 
-            // Only crown if signature verification pass
-            if (unlikely(!is_manager))
+            // Only cache and crown a manager APK after its certificate verifies.
+            // Caching an unverified path can make later scans skip verification forever.
+            if (unlikely(!is_manager)) {
+                cached_manager_apk_path[0] = 0;
                 goto skip_iterate;
+            }
 
+            strscpy(cached_manager_apk_path, candidate_path, sizeof(cached_manager_apk_path));
             crown_manager(candidate_path, uid_data);
 
         skip_iterate:
@@ -328,8 +331,10 @@ void track_throne(bool prune_only)
     }
 
     if (need_rescan) {
-        // If the apk path still exists, the verification result won't be changed
-        if (cached_manager_apk_path[0]) {
+        // Only trust the cached path when a manager UID is already valid.
+        // If manager recognition failed, retry signature verification even when the
+        // previously seen APK path still exists.
+        if (cached_manager_apk_path[0] && ksu_is_manager_appid_valid()) {
             struct path p;
             int ret = kern_path(cached_manager_apk_path, 0, &p);
             if (ret == 0) {
