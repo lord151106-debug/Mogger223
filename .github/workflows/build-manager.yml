@@ -131,7 +131,9 @@ jobs:
     needs: generate-key
     uses: ./.github/workflows/build-lkm.yml
     with:
-      package_name: ${{ github.event_name == 'pull_request' && 'avi.aviatorcrashgametofly.casino.pr' || 'avi.aviatorcrashgametofly.casino' }}
+      # The kernel-side package allowlist must match the manager APK ID in every build.
+      # PR builds use a temporary certificate, but must not use a different package ID.
+      package_name: 'avi.aviatorcrashgametofly.casino'
       expected_size: ${{ needs.generate-key.outputs.expected_size || '' }}
       expected_hash: ${{ needs.generate-key.outputs.expected_hash || '' }}
     secrets: inherit
