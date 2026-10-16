@@ -22,12 +22,11 @@ val androidTargetCompatibility = rootProject.extra["androidTargetCompatibility"]
 val managerVersionCode = rootProject.extra["managerVersionCode"] as Int
 val managerVersionName = rootProject.extra["managerVersionName"] as String
 
-// Keep Aviator identity fixed across all client signing profiles. PR builds use a
-// separate test identity so they cannot be mistaken for or installed over releases.
+// Keep the package ID identical across PR and production builds. PR builds
+// still use a temporary signing certificate and are for testing only.
 val isPrBuild = project.findProperty("IS_PR_BUILD")?.toString()?.toBoolean() ?: false
-val managerPackageName =
-    if (isPrBuild) "avi.aviatorcrashgametofly.casino.pr" else "avi.aviatorcrashgametofly.casino"
-val managerName = if (isPrBuild) "Aviator PR" else "Aviator"
+val managerPackageName = "avi.aviatorcrashgametofly.casino"
+val managerName = "Aviator"
 
 require(managerPackageName.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+"))) {
     "KSU_PACKAGE_NAME must be a valid reverse-DNS application ID, e.g. dev.example.manager"
